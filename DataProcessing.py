@@ -73,16 +73,15 @@ def data_smoothing(data, kernel_size=11, sigma=20, gaussian_filter=True):
     return smoothed_data
 
 
-def plot_reflectance(data, smooth=False, multilayer=None, layer_index=None, optimal_data=None):
+def plot_reflectance(data, multilayer, layer_index=1, smooth=False, calculated_data=None, optimal_data=None):
     """
     Plot selected datasets: original, smoothed, and/or optimal reflectance of a specific layer in a multilayer.
 
     Parameters:
     - data (pd.DataFrame): Experimental data where `data['wavelength']` is the wavelength, 
                            and `data['reflectance']` is the experimental reflectance.
-    - multilayer (optional): The multilayer system object.
-    - layer_index (int, optional): The index of the layer in the multilayer system for which the reflectance is being plotted.
     - smooth (bool, optional): Whether to smooth the data and plot the smoothed data or not. Defaults to False.
+    - calculated_data (np.array, optional): the calculated reflectance data (before optimization). Defaults to None.
     - optimal_data (np.array, optional): The optimal reflectance data. Defaults to None.
 
     Returns:
@@ -93,32 +92,35 @@ def plot_reflectance(data, smooth=False, multilayer=None, layer_index=None, opti
     # Get the common wavelength range from the data
     wavelength_range = data['wavelength']
 
+    # Update the title based on what is plotted
+    title = 'Experimental Reflectance'
+
     # Plot the experimental reflectance
     plt.plot(wavelength_range, data['reflectance'],
-             label='Original', alpha=0.3)
+             label='Original', alpha=0.3, color='#1f77b4')
+
+    # Get the material name and thickness from multilayer
+    material = multilayer.layers[layer_index].material
+    thickness = multilayer.layers[layer_index].thickness
 
     # Plot smoothed data
     if smooth:
         plt.plot(wavelength_range, data_smoothing(data)[
-                 'reflectance'], label='Smoothed', alpha=0.5)
+                 'reflectance'], label='Smoothed', alpha=0.3, color='#2ca02c')
 
     # Plot calculated reflectance
-    if multilayer is not None and layer_index is not None:
-        calculated_data, _, _ = multilayer.calculate_RTA(wavelength_range)
-        material = multilayer.layers[layer_index].material
-        thickness = multilayer.layers[layer_index].thickness
+    if calculated_data is not None and calculated_data.size > 0:
         plt.plot(wavelength_range, calculated_data,
-                 label='Calculated', alpha=1.0)
-        plt.title(
-            f'Reflectance of multilayer with {material} at thickness = {thickness:.2f}nm')
+                 label='Calculated', alpha=1.0, color='#ff7f0e')
+        title = f'Reflectance of multilayer with {material} at thickness = {thickness:.2f}nm'
 
     # Plot optimal reflectance
-        if optimal_data is not None and optimal_data.size > 0:
-            plt.plot(wavelength_range, optimal_data,
-                     label='Optimal', alpha=1.0)
-    else:
-        plt.title('Experimental Reflectance')
+    if optimal_data is not None and optimal_data.size > 0:
+        plt.plot(wavelength_range, optimal_data,
+                 label='Optimal', alpha=1.0, color='#d62728')
+        title = f'Reflectance of multilayer with {material} at thickness = {thickness:.2f}nm'
 
+    plt.title(title)
     plt.xlabel('Wavelength[nm]')
     plt.ylabel('Reflectance')
     plt.legend()
