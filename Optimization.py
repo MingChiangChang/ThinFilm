@@ -42,6 +42,8 @@ def residuals(params, n_points, multilayer, layer_index, data):
     uncertainty = data['uncertainty']
     residuals = ((1 / uncertainty) *
                  (model_reflectance - experimental_reflectance))
+    residuals += 100*(np.sum(np.diff(n_control)**2) + np.sum(np.diff(k_control)**2))
+                     
 
     return residuals
 
@@ -79,6 +81,7 @@ def optimize_nk(multilayer, layer_index, data, n_points, smooth=False):
     else:
         result = least_squares(residuals, initial_params, args=(
             n_points, multilayer, layer_index, data), bounds=(lower_bounds, upper_bounds))
+    print(result.nfev)
     optimized_params = result.x
 
     # Setting optimized values
