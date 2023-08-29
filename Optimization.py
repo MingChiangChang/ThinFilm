@@ -4,7 +4,7 @@ from scipy.interpolate import CubicSpline
 import numpy as np
 
 
-def residuals(params, multilayer, layer_index, data):
+def residuals(params, n_points, multilayer, layer_index, data):
     """
     Calculate the residuals between calculated reflectance and experimental reflectance.
 
@@ -19,9 +19,9 @@ def residuals(params, multilayer, layer_index, data):
     - list of float: Residuals = calculated_reflectance - experimental_reflectance.
     """
     # Extract spline control points and thickness from params
-    n_control = params[:5]
-    k_control = params[5:10]
-    thickness = params[10]
+    n_control = params[: n_points]
+    k_control = params[n_points: 2 * n_points]
+    thickness = params[-1]
 
     # Put n_control, k_control, and thickness into the multilayer system
     # multilayer.layers[layer_index].n = n_control
@@ -46,7 +46,7 @@ def residuals(params, multilayer, layer_index, data):
     return residuals
 
 
-def optimize_nk(multilayer, layer_index, data, smooth=False):
+def optimize_nk(multilayer, layer_index, data, n_points, smooth=False):
     """
     Optimize the control points of n, k, and the thickness for a specific layer in the multilayer using Levenberg-Marquardt algorithm.
 
@@ -69,29 +69,26 @@ def optimize_nk(multilayer, layer_index, data, smooth=False):
     print(
         f'Initial k of layer{layer_index} is: {multilayer.layers[layer_index].initial_k}')
 
-    lower_bounds = [0]*5 + [0]*5 + [0]
-    upper_bounds = [3]*5 + [3]*5 + [1000]
+    lower_bounds = [0]*n_points + [0]*n_points + [0]  # n, k, thickness
+    upper_bounds = [3]*n_points + [3]*n_points + [1000]
 
     # Optimization using Levenberg-Marquardt algorithm (achieved by the least_squares(...) function)
     if smooth:
         result = least_squares(residuals, initial_params, args=(
-            multilayer, layer_index, data_smoothing(data)), bounds=(lower_bounds, upper_bounds))
+            n_points, multilayer, layer_index, data_smoothing(data)), bounds=(lower_bounds, upper_bounds))
     else:
         result = least_squares(residuals, initial_params, args=(
-            multilayer, layer_index, data), bounds=(lower_bounds, upper_bounds))
+            n_points, multilayer, layer_index, data), bounds=(lower_bounds, upper_bounds))
     optimized_params = result.x
 
     # Setting optimized values
-    multilayer.layers[layer_index].n = optimized_params[:5]
-    multilayer.layers[layer_index].k = optimized_params[5:10]
-    multilayer.layers[layer_index].thickness = optimized_params[10]
+    multilayer.layers[layer_index].n = optimized_params[:n_points]
+    multilayer.layers[layer_index].k = optimized_params[n_points:2*n_points]
+    multilayer.layers[layer_index].thickness = optimized_params[-1]
 
-    print('Optimal n: ', optimized_params[:5])
-    print(f'n of layer{layer_index} has been set to: {optimized_params[:5]}')
-    print('Optimal k: ', optimized_params[5:10])
-    print(
-        f'k of layer{layer_index} has been set to: {optimized_params[5:10]}')
-    print('Optimal Thickness: ', optimized_params[10])
+    print('Optimal n: ', optimized_params[:n_points])
+    print('Optimal k: ', optimized_params[n_points:2*n_points])
+    print('Optimal Thickness: ', optimized_params[-1])
 
     wavelength_range = data['wavelength']
     R_optimized, _, _ = multilayer.calculate_RTA(wavelength_range)
