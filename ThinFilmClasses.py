@@ -210,6 +210,7 @@ class ThinFilmLayer:
 
 # **Plotting methods**
 
+
     def plot_n(self, min_wavelength, max_wavelength):
         """
         Plots the index of refraction as a function of wavelength.
@@ -324,79 +325,67 @@ class ThinFilmSystem:
 
     def calculate_propagation_matrix(self, wavelength, layer_index):
         """
-        Calculate the propagation matrix for this layer for a particular wavelength.
+        Calculate the propagation matrix for this layer for a particular wavelength, or an array of wavelengths.
         Assume the incident light is normal (or the calculation would be very complicated...)
         Can add the non-normal part later using Snell's law: N1cos(θ1) = N2cos(θ2)
 
         Parameters:
-        wavelength : float
-            Wavelength [nm] at which to calculate the propagation matrix of this layer.
+        wavelength : float or 1D array
+            Wavelength(s) [nm] at which to calculate the propagation matrix of this layer.
         layer_index: int
             Index of the layer to be calculated in the multilayer system.
 
         Returns:
-        P : 2D array
+        P : 2D array or 3D (len(wavelenth)*2*2) array
             Propagation matrix of this layer.
         """
-        # If wavelength is a float or int, execute original code
-        if isinstance(wavelength, (float, int)):
-            N = self.layers[layer_index].get_N(wavelength)
-            thickness = self.layers[layer_index].thickness
-            phase = 2 * np.pi * N * thickness / wavelength
+        N = self.layers[layer_index].get_N(wavelength)
+        thickness = self.layers[layer_index].thickness
+        phase = 2 * np.pi * N * thickness / wavelength
+
+        # Check if wavelength is an array
+        if np.ndim(wavelength) > 0:
+            P = np.zeros((len(wavelength), 2, 2), dtype=complex)
+            P[:, 0, 0] = np.exp(1j * phase.real) * np.exp(-phase.imag)
+            P[:, 1, 1] = np.exp(-1j * phase.real) * np.exp(phase.imag)
+        else:  # wavelength is a float or int
             P = np.array([[np.exp(1j * phase.real) * np.exp(-phase.imag), 0],
                           [0, np.exp(-1j * phase.real) * np.exp(phase.imag)]])
-        # If wavelength is an array, execute vectorized code
-        elif isinstance(wavelength, np.ndarray):
-            N = np.array([self.layers[layer_index].get_N(w)
-                         for w in wavelength])
-            thickness = self.layers[layer_index].thickness
-            phase = 2 * np.pi * N * \
-                thickness[:, np.newaxis] / wavelength[:, np.newaxis]
-            P = np.array([[np.exp(1j * phase.real) * np.exp(-phase.imag), np.zeros_like(phase)],
-                          [np.zeros_like(phase), np.exp(-1j * phase.real) * np.exp(phase.imag)]])
-            P = np.transpose(P, (2, 0, 1))
-        else:
-            raise ValueError("Invalid type for wavelength.")
-
         return P
 
     def calculate_boundary_matrix(self, wavelength, layer_index):
         """
         Calculate the boundary matrix for two adjacent layers ("this" layer and "next" layer) 
-        in the multilayer system for a particular wavelength.
+        in the multilayer system for a particular wavelength, or an array of wavelengths.
         Assume the incident light is normal (or the calculation would be very complicated...)
         Can add the non-normal part later using Snell's law: N1cos(θ1) = N2cos(θ2)
 
         Parameters:
-        wavelength : float
-            Wavelength [nm] at which to calculate the boundary matrix of this layer.
+        wavelength : float or 1D array
+            Wavelength(s) [nm] at which to calculate the boundary matrix of this layer.
         layer_index: int
             Index of the layer to be calculated in the multilayer system.
 
         Returns:
-        B : 2D array
+        B : 2D array or 3D (len(wavelenth)*2*2) array
             Boundary matrix of the boundary between this layer and the next layer.
         """
-        # If wavelength is a float or int, execute original code
-        if isinstance(wavelength, (float, int)):
-            N_this = self.layers[layer_index].get_N(wavelength)
-            N_next = self.layers[layer_index + 1].get_N(wavelength)
-            B = 1 / (2 * N_this) * np.array([[N_this + N_next, N_this - N_next],
-                                            [N_this - N_next, N_this + N_next]])
-            B = np.conjugate(B)
-        # If wavelength is an array, execute vectorized code
-        elif isinstance(wavelength, np.ndarray):
-            N_this = np.array([self.layers[layer_index].get_N(w)
-                              for w in wavelength])
-            N_next = np.array([self.layers[layer_index + 1].get_N(w)
-                              for w in wavelength])
-            B = 1 / (2 * N_this[:, np.newaxis]) * np.array([[N_this + N_next, N_this - N_next],
-                                                            [N_this - N_next, N_this + N_next]])
-            B = np.conjugate(B)
-            B = np.transpose(B, (2, 0, 1))
-        else:
-            raise ValueError("Invalid type for wavelength.")
+        N_this = self.layers[layer_index].get_N(wavelength)
+        N_next = self.layers[layer_index + 1].get_N(wavelength)
 
+        # If wavelength is an array
+        if np.ndim(wavelength) > 0:
+            B = np.zeros((len(wavelength), 2, 2), dtype=complex)
+            factor = 1 / (2 * N_this)
+            B[:, 0, 0] = factor * (N_this + N_next)
+            B[:, 0, 1] = factor * (N_this - N_next)
+            B[:, 1, 0] = factor * (N_this - N_next)
+            B[:, 1, 1] = factor * (N_this + N_next)
+        else:  # wavelength is a float or int
+            factor = 1 / (2 * N_this)
+            B = factor * np.array([[N_this + N_next, N_this - N_next],
+                                   [N_this - N_next, N_this + N_next]])
+        B = np.conjugate(B)
         return B
 
     def calculate_total_transfer_matrix(self, wavelength):
@@ -407,40 +396,37 @@ class ThinFilmSystem:
         Can add the non-normal part later using Snell's law: N1cos(θ1) = N2cos(θ2)
 
         Parameters:
-        wavelength : float
-            Wavelength [nm] at which to calculate the transfer matrix of this layer.
+        wavelength : float or 1D array
+            Wavelength(s) [nm] at which to calculate the transfer matrix of this layer.
 
         Returns:
-        M_total : 2D array
+        M_total : 2D array or 3D (len(wavelenth)*2*2) array
             Total transfer matrix of the multilayer system.
         """
-        # Handle scalar wavelength
-        if isinstance(wavelength, (float, int)):
-            M = np.eye(2)
-            B01 = self.calculate_boundary_matrix(wavelength, 0)
-            M = M @ B01
-            for index in range(1, len(self.layers) - 1):
-                P = self.calculate_propagation_matrix(wavelength, index)
-                B = self.calculate_boundary_matrix(wavelength, index)
-                M = M @ P @ B
-            return M
-
-        # Handle array wavelength
-        elif isinstance(wavelength, np.ndarray):
+        if np.ndim(wavelength) > 0:  # If it's an array of wavelengths
             num_wavelengths = len(wavelength)
-            M = np.eye(2)[np.newaxis].repeat(num_wavelengths, axis=0)
-
-            B01 = self.calculate_boundary_matrix(wavelength, 0)
-            M = np.einsum('ijk,ikl->ijl', M, B01)
-
-            for index in range(1, len(self.layers) - 1):
-                P = self.calculate_propagation_matrix(wavelength, index)
-                B = self.calculate_boundary_matrix(wavelength, index)
-                M = np.einsum('ijk,ikl->ijl',
-                              np.einsum('ijk,ikl->ijl', M, P), B)
-            return M
+            M = np.tile(np.eye(2), (num_wavelengths, 1, 1))
         else:
-            raise ValueError("Invalid type for wavelength.")
+            M = np.eye(2)
+
+        B01 = self.calculate_boundary_matrix(wavelength, 0)
+        if np.ndim(wavelength) > 0:
+            # pairwise matrix multiplication for every matrix in M and every corresponding identity matrix in B01
+            M = np.matmul(M, B01)
+        else:
+            M = np.dot(M, B01)  # normal 2D matrix multiplication
+
+        for index in range(1, len(self.layers) - 1):
+            P = self.calculate_propagation_matrix(wavelength, index)
+            B = self.calculate_boundary_matrix(wavelength, index)
+
+            if np.ndim(wavelength) > 0:
+                # Perform matrix multiplication in a broadcasted manner
+                M = np.matmul(np.matmul(M, P), B)
+            else:
+                M = np.dot(np.dot(M, P), B)
+
+        return M
 
     def calculate_RTA(self, wavelength_range):
         """
@@ -472,10 +458,8 @@ class ThinFilmSystem:
         R = np.clip(np.abs(r)**2, 0, 1)
 
         # Calculate T
-        n0 = np.array([self.layers[0].get_n(wavelength)
-                      for wavelength in wavelength_range])
-        ns = np.array([self.layers[-1].get_n(wavelength)
-                      for wavelength in wavelength_range])
+        n0 = self.layers[0].get_n(wavelength_range)
+        ns = self.layers[-1].get_n(wavelength_range)  # n of the substrate
         t = 1 / M[:, 0, 0]
         T = np.clip(np.abs(t)**2 * (ns / n0), 0, 1)
 

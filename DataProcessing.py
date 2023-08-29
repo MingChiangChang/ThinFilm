@@ -65,7 +65,8 @@ def data_smoothing(data, kernel_size=11, sigma=20, gaussian_filter=True):
     # Create a smoothed panda DataFrame
     smoothed_data = {
         'wavelength': data['wavelength'],
-        'reflectance': smoothed_reflectance
+        'reflectance': smoothed_reflectance,
+        'uncertainty': data['uncertainty']
     }
     smoothed_data = pd.DataFrame(smoothed_data)
 
