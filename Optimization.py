@@ -52,13 +52,13 @@ def optimize_nk(multilayer, layer_index, data, n_points, weight_n=1, weight_k=1,
         model_reflectance, _, _ = multilayer.calculate_RTA(wavelength_range)
         experimental_reflectance = data['reflectance']
         uncertainty = data['uncertainty']
-        residuals = ((1 / uncertainty) *
-                     (model_reflectance - experimental_reflectance))
+        residuals = (1 / np.sqrt(len(wavelength_range) - len(params))) * ((1 / uncertainty) *
+                                                                          (model_reflectance - experimental_reflectance))
 
         # Smooth regularization (minimize the difference between each two adjacent ns and ks)
-        residuals += weight_n * \
-            np.sum(np.diff(n_control)**2) + weight_k * \
-            np.sum(np.diff(k_control)**2)
+        smooth_regularization = [
+            weight_n * np.sum(np.diff(n_control)**2), weight_k * np.sum(np.diff(k_control)**2)]
+        residuals = np.append(residuals, smooth_regularization)
 
         return residuals
 
