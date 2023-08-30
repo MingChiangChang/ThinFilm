@@ -2,6 +2,8 @@ import pandas as pd
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import medfilt
 import matplotlib.pyplot as plt
+from scipy.interpolate import CubicSpline
+import numpy as np
 
 
 def process_data(path, left, right):
@@ -87,7 +89,7 @@ def plot_reflectance(data, multilayer, layer_index=1, smooth=False, calculated_d
     Returns:
     None. Displays the plot.
     """
-    plt.figure()
+    plt.figure(figsize=(8, 6))
 
     # Get the common wavelength range from the data
     wavelength_range = data['wavelength']
@@ -124,5 +126,79 @@ def plot_reflectance(data, multilayer, layer_index=1, smooth=False, calculated_d
     plt.xlabel('Wavelength[nm]')
     plt.ylabel('Reflectance')
     plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_nk(data, optimized_params, n_points, multilayer, layer_index=1):
+    """
+    Plot n, k before and after optimization.
+    """
+    # Get the wavelength range from the data
+    wavelength_range = data['wavelength']
+
+    # Get the material name from multilayer
+    layer = multilayer.layers[layer_index]
+    material = layer.material
+
+    # Extract the n, k before and after optimization
+    n_initial = layer.initial_n
+    k_initial = layer.initial_k
+    n_optimal = optimized_params[: n_points]
+    k_optimal = optimized_params[n_points: 2 * n_points]
+
+    # Create a figure and a 2x1 grid of subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+    # 1. Plot n on the first subplot (ax1)
+
+    # Scatter plot of initial n
+    ax1.scatter(layer.wavelength, n_initial, c='r')
+    # CubicSpline plot of initial n
+    n_spline_cubic_original_obj = CubicSpline(layer.wavelength, n_initial)
+    n_spline_data = np.maximum(
+        n_spline_cubic_original_obj(wavelength_range), 0)
+    ax1.plot(wavelength_range, n_spline_data, c='r', label='initial n')
+
+    # Scatter plot of optimal n
+    ax1.scatter(layer.wavelength, n_optimal, c='b')
+    # CubicSpline plot of optimal n
+    n_spline_cubic_optimial_obj = CubicSpline(layer.wavelength, n_optimal)
+    n_spline_data_optimal = np.maximum(
+        n_spline_cubic_optimial_obj(wavelength_range), 0)
+    ax1.plot(wavelength_range, n_spline_data_optimal,
+             c='b', label='optimial n')
+
+    # Set label, legend, and title for ax1
+    ax1.set_xlabel('Wavelength [nm]')
+    ax1.set_ylabel('Refractive index (n)')
+    ax1.legend()
+    ax1.set_title(f'Refractive index (n) vs wavelength for {material}')
+
+    # 2. Plot k on the second subplot (ax2)
+
+    # Scatter plot of initial k
+    ax2.scatter(layer.wavelength, k_initial, c='r')
+    # CubicSpline plot of initial k
+    k_spline_cubic_original_obj = CubicSpline(layer.wavelength, k_initial)
+    k_spline_data = np.maximum(
+        k_spline_cubic_original_obj(wavelength_range), 0)
+    ax2.plot(wavelength_range, k_spline_data, c='r', label='initial k')
+
+    # Scatter plot of optimal k
+    ax2.scatter(layer.wavelength, k_optimal, c='b')
+    # CubicSpline plot of optimal k
+    k_spline_cubic_optimized_obj = CubicSpline(layer.wavelength, k_optimal)
+    k_spline_data_optimized = np.maximum(
+        k_spline_cubic_optimized_obj(wavelength_range), 0)
+    ax2.plot(wavelength_range, k_spline_data_optimized,
+             c='b', label='optimial k')
+
+    # Set label, legend, and title for ax2
+    ax2.set_xlabel('Wavelength [nm]')
+    ax2.set_ylabel('Extinction Coefficient (k)')
+    ax2.legend()
+    ax2.set_title(f'Extinction coefficient (k) vs wavelength for {material}')
+
     plt.tight_layout()
     plt.show()
