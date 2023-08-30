@@ -148,7 +148,7 @@ def plot_nk(data, optimized_params, n_points, multilayer, layer_index=1):
     k_optimal = optimized_params[n_points: 2 * n_points]
 
     # Create a figure and a 2x1 grid of subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(4, 6))
 
     # 1. Plot n on the first subplot (ax1)
 
