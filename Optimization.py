@@ -4,7 +4,7 @@ from scipy.interpolate import CubicSpline
 import numpy as np
 
 
-def optimize_nk(multilayer, layer_index, data, n_points, weight_n=1, weight_k=1, smooth=False):
+def optimize_nk(multilayer, layer_index, data, n_points, weight_n=1, weight_k=1, weight_second_diff_n=1, weight_second_diff_k=1, smooth=False):
     """
     Optimize the control points of n, k, and the thickness for a specific layer in the multilayer using Levenberg-Marquardt algorithm.
 
@@ -13,9 +13,10 @@ def optimize_nk(multilayer, layer_index, data, n_points, weight_n=1, weight_k=1,
     - layer_index (int): The index of the layer in the multilayer system to be optimized.
     - data (pd.DataFrame): Experimental data where `data['wavelength']` is the wavelength and `data['reflectance']` is the experimental reflectance.
     - n_points (int): Number of points used to fit n, k.
-    - smooth_reg_factor (float or int, optional): A factor to minimize the difference between two adjacent ns and ks so that the n, k function are smoother. Default is 100.
-    - weight_n: Weight of the sum of the difference between two adjacent ns. Higher the weight, emphasize more on the smoothing of n.
-    - weight_k: Weight of the sum of the difference between two adjacent ks. Higher the weight, emphasize more on the smoothing of k.
+    - weight_n1: Weight of the sum of the difference between two adjacent ns. Higher the weight, emphasize more on the smoothing of n.
+    - weight_k1: Weight of the sum of the difference between two adjacent ks. Higher the weight, emphasize more on the smoothing of k.
+    - weight_second_diff_n: Weight of the sum of the second order difference between adjacent ns.
+    - weight_second_diff_k: Weight of the sum of the second order difference between adjacent ks.
 
     Returns:
     - optimized_params (list of float): A list containing the optimized values [n1, n2, ..., k1, k2, ..., thickness].
@@ -53,12 +54,19 @@ def optimize_nk(multilayer, layer_index, data, n_points, weight_n=1, weight_k=1,
         experimental_reflectance = data['reflectance']
         uncertainty = data['uncertainty']
         residuals = (1 / np.sqrt(len(wavelength_range) - len(params))) * ((1 / uncertainty) *
-                                                                          (model_reflectance - experimental_reflectance))
+                                                                          ((model_reflectance - experimental_reflectance)))
 
         # Smooth regularization (minimize the difference between each two adjacent ns and ks)
         smooth_regularization = [
             weight_n * np.sum(np.diff(n_control)**2), weight_k * np.sum(np.diff(k_control)**2)]
         residuals = np.append(residuals, smooth_regularization)
+
+        # Add second-order difference regularization for n and k
+        second_diff_regularization = [
+            weight_second_diff_n * np.sum(np.diff(n_control, n=2)**2),
+            weight_second_diff_k * np.sum(np.diff(k_control, n=2)**2)
+        ]
+        residuals = np.append(residuals, second_diff_regularization)
 
         return residuals
 
@@ -85,7 +93,6 @@ def optimize_nk(multilayer, layer_index, data, n_points, weight_n=1, weight_k=1,
     else:
         result = least_squares(residuals, initial_params,
                                bounds=(lower_bounds, upper_bounds))
-    print(result.nfev)
     optimized_params = result.x
 
     # Setting optimized values
