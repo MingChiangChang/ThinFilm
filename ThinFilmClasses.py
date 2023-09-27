@@ -1,7 +1,11 @@
+# This file includes two classes: ThinFilmLayer to represent a single layer, and ThinFilmSystem to represent a multilayer system.
+# These classes contain methods that calculate the theoretical reflectance.
+
 import os
 import pandas as pd
 import numpy as np
 from scipy.interpolate import CubicSpline
+from numpy.polynomial import Chebyshev, Legendre
 import matplotlib.pyplot as plt
 from copy import deepcopy
 import sys
@@ -122,7 +126,7 @@ class ThinFilmLayer:
         self.initial_n = deepcopy(self.n)
         self.initial_k = deepcopy(self.k)
 
-        # Generate spline representation of n and k
+        # Generate cubic spline representation of n and k
         original_n_spline_cubic = CubicSpline(wavelength, self.n)
         self.n_spline_cubic = lambda x: np.maximum(
             original_n_spline_cubic(x), 0)
@@ -161,7 +165,7 @@ class ThinFilmLayer:
         wavelength : float or array of floats
             The wavelength [nm] at which to get the refractive index.
         """
-        return self.get_n(wavelength) + 1j * self.get_k(wavelength)
+        return self.get_n(wavelength) - 1j * self.get_k(wavelength)
 
     def set_n(self, wavelength, new_n_value):
         """
@@ -323,7 +327,7 @@ class ThinFilmSystem:
 
 # **Calculation methods**
 
-    def calculate_propagation_matrix(self, wavelength, layer_index):
+    def calculate_propagation_matrix(self, wavelength, layer_index, debug=False):
         """
         Calculate the propagation matrix for this layer for a particular wavelength, or an array of wavelengths.
         Assume the incident light is normal (or the calculation would be very complicated...)
@@ -351,6 +355,17 @@ class ThinFilmSystem:
         else:  # wavelength is a float or int
             P = np.array([[np.exp(1j * phase.real) * np.exp(-phase.imag), 0],
                           [0, np.exp(-1j * phase.real) * np.exp(phase.imag)]])
+
+        # Print something for debugging
+        if debug:
+            print(
+                f"phase = 2 * np.pi * N * thickness / wavelength\n = 2 * 3.14 * {N} * {thickness} / {wavelength}\n = {phase}")
+            print(
+                f"P = [[A, B], [C, D]],\n A = np.exp(1j * phase.real) * np.exp(-phase.imag), \n D = np.exp(-1j * phase.real) * np.exp(phase.imag).")
+            print(
+                f"Now, np.exp(1j * phase.real) = {np.exp(1j * phase.real)},\n np.exp(phase.imag) = {np.exp(phase.imag)}.")
+            print(f"So, P = {P}.")
+
         return P
 
     def calculate_boundary_matrix(self, wavelength, layer_index):
@@ -385,7 +400,7 @@ class ThinFilmSystem:
             factor = 1 / (2 * N_this)
             B = factor * np.array([[N_this + N_next, N_this - N_next],
                                    [N_this - N_next, N_this + N_next]])
-        B = np.conjugate(B)
+        # B = np.conjugate(B)
         return B
 
     def calculate_total_transfer_matrix(self, wavelength):

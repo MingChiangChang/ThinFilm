@@ -1,3 +1,5 @@
+# This file processes the reflectance data (crop, smooth, extract layer thickness), and plot the reflectance and n, k.
+
 import pandas as pd
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import medfilt
@@ -7,7 +9,7 @@ import numpy as np
 import os
 
 
-def process_data(path, uncertainty_threshold=0.02):
+def process_data(path, left, right, uncertainty_threshold=0.02):
     """
     Read and crop the data within [left, right], and return cropped data, left, right.
 
@@ -16,13 +18,17 @@ def process_data(path, uncertainty_threshold=0.02):
         path of the data to be processed.
     uncertainty_threshold : float
         uncertainty threshold below which the data is selected.
+    left: float
+        Manually set the lower bound of the cropped data.
+    right: float
+        Manually set the upper bound of the cropped data.
     **Returns:**
     data : panda DataFrame
         It returns the cropped data.
     left : float
-        The lower bound of the cropped data.
+        The lower bound of the cropped data based on uncertainty threshold.
     right : float
-        The upper bound of the cropped data.
+        The upper bound of the cropped data based on uncertainty threshold.
     """
     # Load the data
     data = pd.read_csv(path, names=[
@@ -30,18 +36,23 @@ def process_data(path, uncertainty_threshold=0.02):
     data = data.rename(columns={'# lambda': 'wavelength'})
 
     # Filter data based on uncertainty
-    uncertainty_filtered_data = data[data['uncertainty']
-                                     <= uncertainty_threshold]
+    if uncertainty_threshold != None and uncertainty_threshold > 0:
+        uncertainty_filtered_data = data[data['uncertainty']
+                                         <= uncertainty_threshold]
 
-    # Determine the smallest and largest wavelengths
-    left = uncertainty_filtered_data['wavelength'].min()
-    right = uncertainty_filtered_data['wavelength'].max()
+        # Determine the smallest and largest wavelengths
+        left = uncertainty_filtered_data['wavelength'].min()
+        right = uncertainty_filtered_data['wavelength'].max()
 
-    print("left = ", left)
-    print("right = ", right)
+        print("left = ", left)
+        print("right = ", right)
 
-    # Filter data based on determined wavelength boundaries
-    data = data[(data['wavelength'] >= left) & (data['wavelength'] <= right)]
+        # Filter data based on determined wavelength boundaries
+        data = data[(data['wavelength'] >= left) &
+                    (data['wavelength'] <= right)]
+    else:
+        data = data[(data['wavelength'] >= left) &
+                    (data['wavelength'] <= right)]
 
     return data, left, right
 
@@ -139,7 +150,7 @@ def data_smoothing(data, kernel_size=11, sigma=20, gaussian_filter=True):
     return smoothed_data
 
 
-def plot_reflectance(data, multilayer, layer_index=1, smooth=False, calculated_data=None, optimal_data=None, save=False, filepath='', filename='reflectance_plot.png'):
+def plot_reflectance(data, multilayer, layer_index=1, smooth=False, calculated_data=None, optimal_data=None, tfoc_data=False, save=False, show=True, filepath='', filename='reflectance_plot.png', iteration=None, elapsed_time=None):
     """
     Plot selected datasets: original, smoothed, and/or optimal reflectance of a specific layer in a multilayer.
 
@@ -189,8 +200,14 @@ def plot_reflectance(data, multilayer, layer_index=1, smooth=False, calculated_d
         plt.plot(wavelength_range, optimal_data,
                  label='Optimal', alpha=1.0, color='#d62728')
         title = f'Reflectance of multilayer with {material} at thickness = {thickness:.2f}nm'
+        if iteration is not None and elapsed_time is not None:
+            title = f'Reflectance of multilayer with {material} at thickness = {thickness:.2f}nm\n - Iteration {iteration}\n - Elapsed Time: {elapsed_time:.2f}s'
 
-    plt.title(title)
+    # Plot tfoc data (data['fit'])
+    if tfoc_data:
+        plt.plot(wavelength_range, data['fit'], label='tfoc')
+
+    plt.title(title, fontsize=10)
     plt.xlabel('Wavelength[nm]')
     plt.ylabel('Reflectance')
     plt.legend()
@@ -201,10 +218,15 @@ def plot_reflectance(data, multilayer, layer_index=1, smooth=False, calculated_d
     if save:
         complete_path = os.path.join(filepath, filename)
         plt.savefig(complete_path, dpi=300)
-    plt.show()
+
+    # Choose to show the plot or not
+    if show:
+        plt.show()
+    else:
+        plt.close()
 
 
-def plot_nk(data, optimized_params, n_points, multilayer, layer_index=1, save=False, filepath='', filename='nk_plot.png'):
+def plot_nk(data, optimized_params, n_points, multilayer, layer_index=1, save=False, show=True, filepath='', filename='nk_plot.png', iteration=None, elapsed_time=None):
     """
     Plot refractive index (n) and extinction coefficient (k) before and after optimization for a specific material layer.
 
@@ -260,7 +282,8 @@ def plot_nk(data, optimized_params, n_points, multilayer, layer_index=1, save=Fa
     ax1.set_xlabel('Wavelength [nm]')
     ax1.set_ylabel('Refractive index (n)')
     ax1.legend()
-    ax1.set_title(f'Refractive index (n) vs wavelength for {material}')
+    ax1.set_title(
+        f'n vs wavelength for {material}', fontsize=10)
 
     # 2. Plot k on the second subplot (ax2)
 
@@ -285,7 +308,14 @@ def plot_nk(data, optimized_params, n_points, multilayer, layer_index=1, save=Fa
     ax2.set_xlabel('Wavelength [nm]')
     ax2.set_ylabel('Extinction Coefficient (k)')
     ax2.legend()
-    ax2.set_title(f'Extinction coefficient (k) vs wavelength for {material}')
+    ax2.set_title(
+        f'k vs wavelength for {material}', fontsize=10)
+
+    if iteration is not None and elapsed_time is not None:
+        ax1.set_title(
+            f'n vs wavelength for {material} \n- Iteration {iteration} \n- Elapsed Time: {elapsed_time:.2f}s', fontsize=10)
+        ax2.set_title(
+            f'k vs wavelength for {material} \n- Iteration {iteration} \n- Elapsed Time: {elapsed_time:.2f}s', fontsize=10)
 
     plt.tight_layout()
 
@@ -293,4 +323,9 @@ def plot_nk(data, optimized_params, n_points, multilayer, layer_index=1, save=Fa
     if save:
         complete_path = os.path.join(filepath, filename)
         plt.savefig(complete_path, dpi=300)
-    plt.show()
+
+    # Choose to show the plot or not
+    if show:
+        plt.show()
+    else:
+        plt.close()

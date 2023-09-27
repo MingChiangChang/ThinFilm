@@ -1,10 +1,16 @@
+# This file includes the optimization process.
+
 from scipy.optimize import least_squares
 from DataProcessing import data_smoothing
 from scipy.interpolate import CubicSpline
 import numpy as np
+from DataProcessing import plot_reflectance, plot_nk
+import time
+
+iteration_counter = [0]
 
 
-def optimize_nk(multilayer, layer_index, data, n_points, weight_n=1, weight_k=1, weight_second_diff_n=1, weight_second_diff_k=1, smooth=False):
+def optimize_nk(multilayer, layer_index, data, n_points, weight_n=1, weight_k=1, weight_second_diff_n=1, weight_second_diff_k=1, ftol=10e-4, smooth=False, initial_reflectance=None, reflectance_plot_path='', nk_plot_path='', start_time=None):
     """
     Optimize the control points of n, k, and the thickness for a specific layer in the multilayer using Levenberg-Marquardt algorithm.
 
@@ -33,6 +39,32 @@ def optimize_nk(multilayer, layer_index, data, n_points, weight_n=1, weight_k=1,
         Returns:
         - list of float: Residuals = calculated_reflectance - experimental_reflectance.
         """
+        # The following codes are used to plot R and nk every 'frequency' number (10, 50, etc.) of iterations, to show the process of optimization
+        # _______________________________________________________________________________________________________________________________________________
+        # Calculate the elapsed time from the start of the optimization
+        elapsed_time = time.time() - start_time if start_time else 0
+
+        # Check if initial_reflectance is provided and valid
+        if initial_reflectance is not None and initial_reflectance.size > 0:
+            iteration_counter[0] += 1
+            frequency = 50  # Modify the frequency as needed
+            if iteration_counter[0] % frequency == 0:
+
+                # Calculate the current reflectance (optimal during optimization)
+                current_reflectance, _, _ = multilayer.calculate_RTA(
+                    data['wavelength'])
+
+                # Plot reflectance with your settings
+                reflectance_filename = f"reflectance_plot_{iteration_counter[0]}.png"
+                plot_reflectance(data, multilayer=multilayer, layer_index=layer_index, calculated_data=initial_reflectance,
+                                 optimal_data=current_reflectance, save=True, show=False, filepath=reflectance_plot_path, filename=reflectance_filename, iteration=iteration_counter[0], elapsed_time=elapsed_time)
+
+                # Plot n and k with your settings
+                nk_filename = f"nk_plot_{iteration_counter[0]}.png"
+                plot_nk(data, params, n_points, multilayer, layer_index=layer_index,
+                        save=True, show=False, filepath=nk_plot_path, filename=nk_filename, iteration=iteration_counter[0], elapsed_time=elapsed_time)
+        # _______________________________________________________________________________________________________________________________________________
+
         # Extract spline control points and thickness from params
         n_control = params[: n_points]
         k_control = params[n_points: 2 * n_points]
@@ -89,10 +121,10 @@ def optimize_nk(multilayer, layer_index, data, n_points, weight_n=1, weight_k=1,
     if smooth:
         data = data_smoothing(data)
         result = least_squares(residuals, initial_params,
-                               bounds=(lower_bounds, upper_bounds))
+                               bounds=(lower_bounds, upper_bounds), ftol=ftol)
     else:
         result = least_squares(residuals, initial_params,
-                               bounds=(lower_bounds, upper_bounds))
+                               bounds=(lower_bounds, upper_bounds), ftol=ftol)
     optimized_params = result.x
 
     # Setting optimized values
